@@ -5,6 +5,7 @@
     var employmentTypes = new Dictionary<byte, string> { {1,"Full-Time"},{2,"Part-Time"},{3,"Contract"},{4,"Internship"},{5,"Freelance"} };
     var remoteOptions = new Dictionary<byte, string> { {0,"No local"},{1,"Híbrido"},{2,"Remoto"} };
     var oppsWithMatch = ViewBag.OpportunitiesWithMatch as List<OpportunityWithMatch>;
+    var locationsList = ViewBag.Locations as IEnumerable<UsersController.LookupItem> ?? Enumerable.Empty<UsersController.LookupItem>();
 }
 
 <style>
@@ -83,8 +84,21 @@
         <form asp-action="Index" method="get" class="jobs-search-row">
             <input type="search" name="q" class="form-control" style="flex:2;min-width:180px;"
                    placeholder="Cargo, empresa ou palavra-chave..." value="@ViewBag.Q" />
-            <input type="text" name="location" class="form-control" style="flex:1;min-width:140px;"
-                   placeholder="Localização..." value="@ViewBag.Location" />
+            <select name="locationId" class="form-select" style="flex:1;min-width:140px;" id="locationFilterSelect">
+                <option value="">Localização...</option>
+                @foreach (var loc in locationsList)
+                {
+                    var selLoc = (ViewBag.LocationId is int lid && lid == loc.LocationId) ? "selected" : "";
+                    if (selLoc == "selected")
+                    {
+                        <option value="@loc.LocationId" selected>@loc.Name (@loc.CountryName)</option>
+                    }
+                    else
+                    {
+                        <option value="@loc.LocationId">@loc.Name (@loc.CountryName)</option>
+                    }
+                }
+            </select>
             <select name="employmentType" class="form-select" style="flex:1;min-width:140px;">
                 <option value="">Tipo de emprego</option>
                 @foreach (var kv in employmentTypes)
@@ -133,11 +147,11 @@
 
     <!-- Tabs: Todas | Para Ti -->
     <div style="display:flex;gap:0.25rem;margin-bottom:1.5rem;border-bottom:1px solid rgba(255,255,255,0.08);">
-        <a href="@Url.Action("Index","Opportunities", new { q=ViewBag.Q, location=ViewBag.Location, employmentType=ViewBag.EmploymentType, remoteOption=ViewBag.RemoteOption })"
+        <a href="@Url.Action("Index","Opportunities", new { q=ViewBag.Q, locationId=ViewBag.LocationId, employmentType=ViewBag.EmploymentType, remoteOption=ViewBag.RemoteOption })"
            style="padding:0.5rem 1.25rem;font-size:0.88rem;font-weight:600;text-decoration:none;border-bottom:2px solid @(isRecommended ? "transparent" : "#0052CC");color:@(isRecommended ? "var(--dark-text-muted,#a8b2c1)" : "#4f8ef7");margin-bottom:-1px;">
             Todas
         </a>
-        <a href="@Url.Action("Index","Opportunities", new { q=ViewBag.Q, location=ViewBag.Location, recommended=true })"
+        <a href="@Url.Action("Index","Opportunities", new { q=ViewBag.Q, locationId=ViewBag.LocationId, recommended=true })"
            style="padding:0.5rem 1.25rem;font-size:0.88rem;font-weight:600;text-decoration:none;border-bottom:2px solid @(isRecommended ? "#0052CC" : "transparent");color:@(isRecommended ? "#4f8ef7" : "var(--dark-text-muted,#a8b2c1)");margin-bottom:-1px;">
             ⭐ Para Ti
         </a>
@@ -192,9 +206,13 @@
                             <p class="job-company">@(item.Company?.Name ?? $"Empresa #{item.CompanyId}")</p>
                         }
                         <div class="job-tags">
-                            @if (!string.IsNullOrEmpty(item.Location))
+                            @{
+                                var locationDisplay = matchItem?.LocationName ?? matchItem?.Location ?? item.Location;
+                                var countryDisplay = matchItem?.CountryName;
+                            }
+                            @if (!string.IsNullOrEmpty(locationDisplay))
                             {
-                                <span class="job-tag">📍 @item.Location</span>
+                                <span class="job-tag">📍 @locationDisplay@(countryDisplay != null ? $", {countryDisplay}" : "")</span>
                             }
                             @if (empLabel != null)
                             {
@@ -215,3 +233,25 @@
         </div>
     }
 </div>
+
+@section Scripts {
+<script>
+// Searchable location filter combobox
+(function() {
+    var sel = document.getElementById('locationFilterSelect');
+    if (!sel) return;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Pesquisar localização...';
+    input.style.cssText = 'background:rgba(255,255,255,0.06);color:inherit;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:0.3rem 0.6rem;font-size:0.82rem;width:100%;margin-bottom:2px;';
+    sel.parentNode.insertBefore(input, sel);
+    input.addEventListener('input', function() {
+        var q = this.value.toLowerCase();
+        Array.from(sel.options).forEach(function(opt) {
+            if (!opt.value) { opt.style.display = ''; return; }
+            opt.style.display = opt.text.toLowerCase().includes(q) ? '' : 'none';
+        });
+    });
+})();
+</script>
+}

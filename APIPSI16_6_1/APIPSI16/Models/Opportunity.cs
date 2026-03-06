@@ -19,6 +19,16 @@ public partial class Opportunity
 
     public string? Location { get; set; }
 
+    /// <summary>FK to the Locations table. Used for structured location-based matching.</summary>
+    public int? LocationId { get; set; }
+
+    /// <summary>FK to the Countries table.</summary>
+    public int? CountryId { get; set; }
+
+    public virtual Location? LocationNav { get; set; }
+
+    public virtual Country? CountryNav { get; set; }
+
     public byte? RemoteOption { get; set; }
 
     /// <summary>Comma-separated JobRoleId values (e.g. "1,3,7")</summary>

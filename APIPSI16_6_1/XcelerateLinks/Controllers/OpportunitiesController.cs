@@ -17,7 +17,7 @@ namespace XcelerateLinks.Mvc.Controllers
         }
 
         // Role-dispatched: admin → Index (table), user/employer → UserIndex (job search)
-        public async Task<IActionResult> Index(string? q = null, string? location = null, byte? employmentType = null, byte? remoteOption = null, bool recommended = false)
+        public async Task<IActionResult> Index(string? q = null, int? locationId = null, byte? employmentType = null, byte? remoteOption = null, bool recommended = false)
         {
             if (!await ValidateSessionAsync())
                 return RedirectToAction("Login", "Account");
@@ -55,6 +55,7 @@ namespace XcelerateLinks.Mvc.Controllers
                 opportunitiesWithMatch = plain.Select(o => new OpportunityWithMatch
                 {
                     Id = o.Id, Title = o.Title, Location = o.Location,
+                    LocationId = o.LocationId, LocationName = o.LocationName,
                     EmploymentType = o.EmploymentType, SeniorityLevel = o.SeniorityLevel,
                     RemoteOption = o.RemoteOption, CompanyId = o.CompanyId, CompanyName = o.CompanyName,
                     MatchScore = 0
@@ -65,11 +66,11 @@ namespace XcelerateLinks.Mvc.Controllers
             if (!string.IsNullOrWhiteSpace(q))
                 opportunitiesWithMatch = opportunitiesWithMatch.Where(o =>
                     (o.Title ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                    (o.Location ?? "").Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+                    (o.LocationName ?? o.Location ?? "").Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
 
-            if (!string.IsNullOrWhiteSpace(location))
-                opportunitiesWithMatch = opportunitiesWithMatch.Where(o =>
-                    (o.Location ?? "").Contains(location, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (locationId.HasValue)
+                opportunitiesWithMatch = opportunitiesWithMatch
+                    .Where(o => o.LocationId == locationId.Value).ToList();
 
             if (employmentType.HasValue)
                 opportunitiesWithMatch = opportunitiesWithMatch.Where(o => o.EmploymentType == employmentType.Value).ToList();
@@ -77,8 +78,15 @@ namespace XcelerateLinks.Mvc.Controllers
             if (remoteOption.HasValue)
                 opportunitiesWithMatch = opportunitiesWithMatch.Where(o => o.RemoteOption == remoteOption.Value).ToList();
 
+            // Load locations for combobox filter
+            var locsResp = await client.GetAsync("api/users/lookups/locations");
+            if (locsResp.IsSuccessStatusCode)
+                ViewBag.Locations = await locsResp.Content.ReadFromJsonAsync<IEnumerable<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>>() ?? Array.Empty<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>();
+            else
+                ViewBag.Locations = Array.Empty<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>();
+
             ViewBag.Q = q;
-            ViewBag.Location = location;
+            ViewBag.LocationId = locationId;
             ViewBag.EmploymentType = employmentType;
             ViewBag.RemoteOption = remoteOption;
             ViewBag.Recommended = recommended;
@@ -88,6 +96,7 @@ namespace XcelerateLinks.Mvc.Controllers
             var opportunities = opportunitiesWithMatch.Select(o => new Opportunity
             {
                 Id = o.Id, Title = o.Title, Location = o.Location,
+                LocationId = o.LocationId,
                 EmploymentType = o.EmploymentType, SeniorityLevel = o.SeniorityLevel,
                 RemoteOption = o.RemoteOption, CompanyId = o.CompanyId
             });
@@ -95,8 +104,8 @@ namespace XcelerateLinks.Mvc.Controllers
             return View("UserIndex", opportunities);
         }
 
-        public async Task<IActionResult> Browse(string? q = null, string? location = null, byte? employmentType = null, byte? remoteOption = null)
-            => await Index(q, location, employmentType, remoteOption);
+        public async Task<IActionResult> Browse(string? q = null, int? locationId = null, byte? employmentType = null, byte? remoteOption = null)
+            => await Index(q, locationId, employmentType, remoteOption);
 
         public async Task<IActionResult> Details(int id)
         {
@@ -304,6 +313,18 @@ namespace XcelerateLinks.Mvc.Controllers
             {
                 ViewBag.JobRoles = Array.Empty<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>();
             }
+
+            // Locations for combobox
+            var locsResp = await client.GetAsync("api/users/lookups/locations");
+            if (locsResp.IsSuccessStatusCode)
+            {
+                var locs = await locsResp.Content.ReadFromJsonAsync<IEnumerable<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>>();
+                ViewBag.Locations = locs ?? Array.Empty<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>();
+            }
+            else
+            {
+                ViewBag.Locations = Array.Empty<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>();
+            }
         }
 
         public record CompanyDropItem(int CompanyId = 0, string? CompanyName = null);
@@ -314,6 +335,9 @@ namespace XcelerateLinks.Mvc.Controllers
         public int Id { get; set; }
         public string? Title { get; set; }
         public string? Location { get; set; }
+        public int? LocationId { get; set; }
+        public string? LocationName { get; set; }
+        public string? CountryName { get; set; }
         public byte? EmploymentType { get; set; }
         public byte? SeniorityLevel { get; set; }
         public byte? RemoteOption { get; set; }
@@ -328,6 +352,8 @@ namespace XcelerateLinks.Mvc.Controllers
         public int Id { get; set; }
         public string? Title { get; set; }
         public string? Location { get; set; }
+        public int? LocationId { get; set; }
+        public string? LocationName { get; set; }
         public byte? EmploymentType { get; set; }
         public byte? SeniorityLevel { get; set; }
         public byte? RemoteOption { get; set; }

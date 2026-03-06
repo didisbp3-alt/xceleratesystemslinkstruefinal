@@ -56,7 +56,11 @@ namespace APIPSI16.Controllers
                         ProfileBio = u.ProfileBio,
                         DoB = u.DoB,
                         PhoneNumber = u.PhoneNumber,
-                        ProfilePictureUrl = u.ProfilePictureUrl
+                        ProfilePictureUrl = u.ProfilePictureUrl,
+                        LocationId = u.LocationId,
+                        CountryId = u.CountryId,
+                        LocationName = u.LocationNav != null ? u.LocationNav.Name : u.Location,
+                        CountryName = u.CountryNav != null ? u.CountryNav.Name : null
                     })
                     .ToListAsync();
 
@@ -77,7 +81,12 @@ namespace APIPSI16.Controllers
                     ProfileBio = u.ProfileBio,
                     DoB = u.DoB,
                     PhoneNumber = u.PhoneNumber,
-                    ProfilePictureUrl = u.ProfilePictureUrl
+                    ProfilePictureUrl = u.ProfilePictureUrl,
+                    Location = u.Location,
+                    LocationId = u.LocationId,
+                    CountryId = u.CountryId,
+                    LocationName = u.LocationNav != null ? u.LocationNav.Name : u.Location,
+                    CountryName = u.CountryNav != null ? u.CountryNav.Name : null
                 })
                 .ToListAsync();
 
@@ -94,6 +103,7 @@ namespace APIPSI16.Controllers
                     UserId = u.UserId,
                     Name = u.Name,
                     Email = u.Email,
+                    Username = u.Username,
                     Nationality = u.Nationality,
                     JobPreference = u.JobPreference,
                     ProfileBio = u.ProfileBio,
@@ -102,7 +112,12 @@ namespace APIPSI16.Controllers
                     Role = u.Role,
                     ProfilePictureUrl = u.ProfilePictureUrl,
                     BannerUrl = u.BannerUrl,
-                    SubscriptionPlan = u.SubscriptionPlan
+                    SubscriptionPlan = u.SubscriptionPlan,
+                    Location = u.Location,
+                    LocationId = u.LocationId,
+                    CountryId = u.CountryId,
+                    LocationName = u.LocationNav != null ? u.LocationNav.Name : u.Location,
+                    CountryName = u.CountryNav != null ? u.CountryNav.Name : null
                 })
                 .FirstOrDefaultAsync();
 
@@ -122,7 +137,11 @@ namespace APIPSI16.Controllers
         [HttpGet("{id}/profile")]
         public async Task<IActionResult> GetUserProfile(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users
+                .Include(u => u.LocationNav)
+                    .ThenInclude(l => l != null ? l.Country : null)
+                .Include(u => u.CountryNav)
+                .FirstOrDefaultAsync(u => u.UserId == id);
             if (user == null) return NotFound();
 
             var skills = await _context.UserSkills
@@ -169,6 +188,10 @@ namespace APIPSI16.Controllers
                 Email = user.Email,
                 Username = user.Username,
                 Location = user.Location,
+                LocationId = user.LocationId,
+                CountryId = user.CountryId,
+                LocationName = user.LocationNav?.Name ?? user.Location,
+                CountryName = user.CountryNav?.Name,
                 PhoneNumber = user.PhoneNumber,
                 Nationality = user.Nationality,
                 JobPreference = user.JobPreference,
@@ -550,6 +573,8 @@ namespace APIPSI16.Controllers
                 existing.ProfileBio = updated.ProfileBio;
                 existing.DoB = updated.DoB;
                 existing.Location = updated.Location;
+                existing.LocationId = updated.LocationId;
+                existing.CountryId = updated.CountryId;
                 // Do NOT allow non-admins to change Email, Role, PasswordHash
             }
             else
@@ -565,6 +590,8 @@ namespace APIPSI16.Controllers
                 existing.DoB = updated.DoB;
                 existing.Role = updated.Role;
                 existing.Location = updated.Location;
+                existing.LocationId = updated.LocationId;
+                existing.CountryId = updated.CountryId;
                 // If you want admins to reset passwords, provide a dedicated endpoint that accepts a hashed password
             }
 
@@ -681,6 +708,35 @@ namespace APIPSI16.Controllers
             var list = await _context.JobRoles
                 .OrderBy(j => j.Name)
                 .Select(j => new { j.JobRoleId, j.Name })
+                .ToListAsync();
+            return Ok(list);
+        }
+
+        // GET: api/users/lookups/countries
+        [HttpGet("lookups/countries")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetCountries()
+        {
+            var list = await _context.Countries
+                .OrderBy(c => c.Name)
+                .Select(c => new { c.CountryId, c.Name, c.Code })
+                .ToListAsync();
+            return Ok(list);
+        }
+
+        // GET: api/users/lookups/locations?countryId=1
+        [HttpGet("lookups/locations")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetLocations([FromQuery] int? countryId = null)
+        {
+            var q = _context.Locations.Include(l => l.Country).AsQueryable();
+            if (countryId.HasValue)
+                q = q.Where(l => l.CountryId == countryId.Value);
+
+            var list = await q
+                .OrderBy(l => l.Country.Name)
+                .ThenBy(l => l.Name)
+                .Select(l => new { l.LocationId, l.Name, l.Region, l.CountryId, CountryName = l.Country.Name, CountryCode = l.Country.Code })
                 .ToListAsync();
             return Ok(list);
         }

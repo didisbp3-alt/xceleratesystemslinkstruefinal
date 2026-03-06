@@ -33,6 +33,8 @@ public partial class xcleratesystemslinks_SampleDBContext : DbContext
 
     public virtual DbSet<Connection> Connections { get; set; }
 
+    public virtual DbSet<Country> Countries { get; set; }
+
     public virtual DbSet<EmployerCandidateHistory> EmployerCandidateHistories { get; set; }
 
     public virtual DbSet<InterviewRound> InterviewRounds { get; set; }
@@ -40,6 +42,8 @@ public partial class xcleratesystemslinks_SampleDBContext : DbContext
     public virtual DbSet<JobApplication> JobApplications { get; set; }
 
     public virtual DbSet<JobRole> JobRoles { get; set; }
+
+    public virtual DbSet<Location> Locations { get; set; }
 
     public virtual DbSet<Nationality> Nationalities { get; set; }
 
@@ -180,6 +184,41 @@ public partial class xcleratesystemslinks_SampleDBContext : DbContext
                 .HasColumnType("datetime");
         });
 
+        modelBuilder.Entity<Country>(entity =>
+        {
+            entity.HasKey(e => e.CountryId).HasName("PK__Countries__CountryId");
+            entity.ToTable("Countries");
+
+            entity.HasIndex(e => e.Name, "UQ__Countries__Name").IsUnique();
+            entity.HasIndex(e => e.Code, "UQ__Countries__Code").IsUnique();
+
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.Code).HasMaxLength(2);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<Location>(entity =>
+        {
+            entity.HasKey(e => e.LocationId).HasName("PK__Locations__LocationId");
+            entity.ToTable("Locations");
+
+            entity.HasIndex(e => e.CountryId, "IX_Locations_CountryId");
+
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.Region).HasMaxLength(100);
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+
+            entity.HasOne(d => d.Country)
+                .WithMany(p => p.Locations)
+                .HasForeignKey(d => d.CountryId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Locations_Countries");
+        });
+
 
         modelBuilder.Entity<JobApplication>(entity =>
         {
@@ -278,6 +317,16 @@ public partial class xcleratesystemslinks_SampleDBContext : DbContext
                 .WithMany()
                 .HasForeignKey(d => d.CreatorId)
                 .HasConstraintName("FK_Opportunities_CreatedBy");
+
+            entity.HasOne(d => d.LocationNav)
+                .WithMany()
+                .HasForeignKey(d => d.LocationId)
+                .HasConstraintName("FK_Opportunities_Location");
+
+            entity.HasOne(d => d.CountryNav)
+                .WithMany()
+                .HasForeignKey(d => d.CountryId)
+                .HasConstraintName("FK_Opportunities_Country");
         });
 
         modelBuilder.Entity<Post>(entity =>
@@ -445,6 +494,16 @@ public partial class xcleratesystemslinks_SampleDBContext : DbContext
             entity.Property(e => e.SubscriptionPlan).HasDefaultValue(0);
             entity.Property(e => e.EmployerRequestDocumentUrl).HasMaxLength(500);
             entity.Property(e => e.EmployerRequestNote).HasMaxLength(1000);
+
+            entity.HasOne(d => d.LocationNav)
+                .WithMany()
+                .HasForeignKey(d => d.LocationId)
+                .HasConstraintName("FK_Users_Location");
+
+            entity.HasOne(d => d.CountryNav)
+                .WithMany()
+                .HasForeignKey(d => d.CountryId)
+                .HasConstraintName("FK_Users_Country");
         });
 
         modelBuilder.Entity<UserJobPreference>(entity =>

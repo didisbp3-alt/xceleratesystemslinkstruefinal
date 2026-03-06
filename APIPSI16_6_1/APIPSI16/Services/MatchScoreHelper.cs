@@ -10,8 +10,58 @@ namespace APIPSI16.Services
         public const double LocationWeight = 0.3;
 
         /// <summary>
-        /// Returns true when the user's location and the opportunity's location are considered
-        /// a match (case-insensitive substring check in both directions).
+        /// Country codes that are geographically compact. Within these countries,
+        /// a different city/location still yields a partial location score.
+        /// For large countries (US, CA, etc.) a different location → 0 score.
+        /// </summary>
+        private static readonly HashSet<string> SmallCountries = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "PT", "NL", "BE", "LU", "AT", "CH", "IE", "DK", "HR", "SI", "SK", "CZ", "HU"
+        };
+
+        /// <summary>
+        /// Computes a 0-100 location score based on structured location data.
+        /// <list type="bullet">
+        ///   <item>Same LocationId → 100 (exact match)</item>
+        ///   <item>Same region, small country → 65</item>
+        ///   <item>Different region, small country → 35</item>
+        ///   <item>Same region, large country → 50</item>
+        ///   <item>Different region, large country → 0 (e.g. US state change)</item>
+        ///   <item>Different country → 0</item>
+        ///   <item>Missing data → -1 (caller should treat as "no location data")</item>
+        /// </list>
+        /// </summary>
+        public static int ComputeLocationScore(
+            int? userLocationId, int? oppLocationId,
+            string? userRegion, string? oppRegion,
+            string? userCountryCode, string? oppCountryCode)
+        {
+            if (!userLocationId.HasValue || !oppLocationId.HasValue)
+                return -1; // no structured location data available
+
+            if (userLocationId.Value == oppLocationId.Value)
+                return 100;
+
+            // Different locations – compare countries
+            if (string.IsNullOrWhiteSpace(userCountryCode) || string.IsNullOrWhiteSpace(oppCountryCode))
+                return 0;
+
+            if (!string.Equals(userCountryCode, oppCountryCode, StringComparison.OrdinalIgnoreCase))
+                return 0; // different country
+
+            // Same country – proximity depends on country size
+            bool sameRegion = !string.IsNullOrWhiteSpace(userRegion)
+                && string.Equals(userRegion, oppRegion, StringComparison.OrdinalIgnoreCase);
+
+            if (SmallCountries.Contains(userCountryCode))
+                return sameRegion ? 65 : 35;
+            else
+                return sameRegion ? 50 : 0;
+        }
+
+        /// <summary>
+        /// Legacy string-based location match (kept for backward compatibility).
+        /// Prefer <see cref="ComputeLocationScore"/> when structured IDs are available.
         /// </summary>
         public static bool LocationsMatch(string? userLocation, string? opportunityLocation)
         {
@@ -25,13 +75,29 @@ namespace APIPSI16.Services
         }
 
         /// <summary>
-        /// Combines a role score (0-100) and a location match flag into a single weighted percentage.
+        /// Combines a role score (0-100) and a location score (0-100 or -1 for no data)
+        /// into a single weighted percentage.
         /// </summary>
         /// <param name="roleScore">0-100 score based on job-role overlap.</param>
-        /// <param name="locationMatched">Whether the user's location matches the opportunity's location.</param>
-        /// <param name="hasRoles">Whether the opportunity specifies any required job roles.</param>
-        /// <param name="hasLocations">Whether both the user and the opportunity have location data.</param>
+        /// <param name="locationScore">0-100 score from <see cref="ComputeLocationScore"/>, or -1 if no data.</param>
+        /// <param name="hasRoles">Whether the opportunity specifies required job roles.</param>
         /// <returns>Weighted match percentage (0-100).</returns>
+        public static int ComputeWeightedScore(int roleScore, int locationScore, bool hasRoles)
+        {
+            bool hasLocations = locationScore >= 0;
+
+            if (hasRoles && hasLocations)
+                return (int)Math.Round(roleScore * RoleWeight + locationScore * LocationWeight);
+            if (hasRoles)
+                return roleScore;
+            if (hasLocations)
+                return locationScore;
+            return 0;
+        }
+
+        /// <summary>
+        /// Overload that accepts a boolean locationMatched flag for simple cases.
+        /// </summary>
         public static int ComputeWeightedScore(int roleScore, bool locationMatched, bool hasRoles, bool hasLocations)
         {
             int locationScore = locationMatched ? 100 : 0;

@@ -41,7 +41,11 @@ namespace APIPSI16.Controllers
 
             var results = await q.Select(o => new
             {
-                o.Id, o.Title, o.Location, o.EmploymentType, o.SeniorityLevel, o.RemoteOption,
+                o.Id, o.Title, o.Location,
+                LocationId = o.LocationId,
+                LocationName = o.LocationNav != null ? o.LocationNav.Name : o.Location,
+                CountryName = o.CountryNav != null ? o.CountryNav.Name : null,
+                o.EmploymentType, o.SeniorityLevel, o.RemoteOption,
                 o.CompanyId, CompanyName = o.Company != null ? o.Company.Name : null
             }).ToListAsync();
 
@@ -59,6 +63,9 @@ namespace APIPSI16.Controllers
                     o.Id,
                     o.Title,
                     o.Location,
+                    LocationId = o.LocationId,
+                    LocationName = o.LocationNav != null ? o.LocationNav.Name : o.Location,
+                    CountryName = o.CountryNav != null ? o.CountryNav.Name : null,
                     o.EmploymentType,
                     o.SeniorityLevel,
                     o.RemoteOption,
@@ -77,6 +84,8 @@ namespace APIPSI16.Controllers
         {
             var opportunity = await _context.Opportunities
                 .Include(o => o.Company)
+                .Include(o => o.LocationNav)
+                    .ThenInclude(l => l != null ? l.Country : null)
                 .FirstOrDefaultAsync(o => o.Id == id);
 
             if (opportunity == null) return NotFound();
@@ -196,10 +205,15 @@ namespace APIPSI16.Controllers
             var uid = GetCurrentUserId();
             if (uid == null) return Unauthorized();
 
-            var user = await _context.Users.FindAsync(uid.Value);
+            var user = await _context.Users
+                .Include(u => u.LocationNav)
+                    .ThenInclude(l => l != null ? l.Country : null)
+                .FirstOrDefaultAsync(u => u.UserId == uid.Value);
 
             var opportunities = await _context.Opportunities
                 .Include(o => o.Company)
+                .Include(o => o.LocationNav)
+                    .ThenInclude(l => l != null ? l.Country : null)
                 .ToListAsync();
 
             var userPrefIds = await _context.UserJobPreferences
@@ -207,7 +221,9 @@ namespace APIPSI16.Controllers
                 .Select(p => p.JobRoleId)
                 .ToListAsync();
 
-            var userLocation = user?.Location;
+            var userLocationId = user?.LocationId;
+            var userRegion = user?.LocationNav?.Region;
+            var userCountryCode = user?.LocationNav?.Country?.Code ?? user?.CountryNav?.Code;
 
             var results = opportunities.Select(o =>
             {
@@ -226,17 +242,38 @@ namespace APIPSI16.Controllers
                     roleScore = (int)Math.Round((double)matches / requiredRoleIds.Count * 100);
                 }
 
-                // Location score (30% weight)
-                bool locationMatched = MatchScoreHelper.LocationsMatch(userLocation, o.Location);
-                bool hasLocations = !string.IsNullOrWhiteSpace(userLocation) && !string.IsNullOrWhiteSpace(o.Location);
+                // Location score (30% weight) – use structured IDs when available
+                int locationScore;
+                if (userLocationId.HasValue && o.LocationId.HasValue)
+                {
+                    var oppRegion = o.LocationNav?.Region;
+                    var oppCountryCode = o.LocationNav?.Country?.Code;
+                    locationScore = MatchScoreHelper.ComputeLocationScore(
+                        userLocationId, o.LocationId,
+                        userRegion, oppRegion,
+                        userCountryCode, oppCountryCode);
+                }
+                else
+                {
+                    // Fall back to legacy string matching
+                    bool legacyMatch = MatchScoreHelper.LocationsMatch(user?.Location, o.Location);
+                    bool hasLegacyLocations = !string.IsNullOrWhiteSpace(user?.Location) && !string.IsNullOrWhiteSpace(o.Location);
+                    locationScore = hasLegacyLocations ? (legacyMatch ? 100 : 0) : -1;
+                }
 
-                int matchScore = MatchScoreHelper.ComputeWeightedScore(roleScore, locationMatched, requiredRoleIds.Count > 0, hasLocations);
+                int matchScore = MatchScoreHelper.ComputeWeightedScore(roleScore, locationScore, requiredRoleIds.Count > 0);
+
+                var locationName = o.LocationNav?.Name ?? o.Location;
+                var countryName = o.LocationNav?.Country?.Name;
 
                 return new
                 {
                     o.Id,
                     o.Title,
                     o.Location,
+                    LocationId = o.LocationId,
+                    LocationName = locationName,
+                    CountryName = countryName,
                     o.EmploymentType,
                     o.SeniorityLevel,
                     o.RemoteOption,
@@ -252,7 +289,18 @@ namespace APIPSI16.Controllers
 
         private async Task<int> CalculateMatchScoreAsync(int userId, Opportunity opp)
         {
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _context.Users
+                .Include(u => u.LocationNav)
+                    .ThenInclude(l => l != null ? l.Country : null)
+                .FirstOrDefaultAsync(u => u.UserId == userId);
+
+            // Load opportunity's location if not already loaded
+            if (opp.LocationNav == null && opp.LocationId.HasValue)
+            {
+                opp.LocationNav = await _context.Locations
+                    .Include(l => l.Country)
+                    .FirstOrDefaultAsync(l => l.LocationId == opp.LocationId.Value);
+            }
 
             var requiredRoleIds = string.IsNullOrWhiteSpace(opp.RequiredJobRoleIds)
                 ? new HashSet<int>()
@@ -273,10 +321,22 @@ namespace APIPSI16.Controllers
                 roleScore = (int)Math.Round((double)matches / requiredRoleIds.Count * 100);
             }
 
-            bool locationMatched = MatchScoreHelper.LocationsMatch(user?.Location, opp.Location);
-            bool hasLocations = !string.IsNullOrWhiteSpace(user?.Location) && !string.IsNullOrWhiteSpace(opp.Location);
+            int locationScore;
+            if (user?.LocationId.HasValue == true && opp.LocationId.HasValue)
+            {
+                locationScore = MatchScoreHelper.ComputeLocationScore(
+                    user.LocationId, opp.LocationId,
+                    user.LocationNav?.Region, opp.LocationNav?.Region,
+                    user.LocationNav?.Country?.Code, opp.LocationNav?.Country?.Code);
+            }
+            else
+            {
+                bool legacyMatch = MatchScoreHelper.LocationsMatch(user?.Location, opp.Location);
+                bool hasLegacy = !string.IsNullOrWhiteSpace(user?.Location) && !string.IsNullOrWhiteSpace(opp.Location);
+                locationScore = hasLegacy ? (legacyMatch ? 100 : 0) : -1;
+            }
 
-            return MatchScoreHelper.ComputeWeightedScore(roleScore, locationMatched, requiredRoleIds.Count > 0, hasLocations);
+            return MatchScoreHelper.ComputeWeightedScore(roleScore, locationScore, requiredRoleIds.Count > 0);
         }
 
         private bool OpportunityExists(int id)

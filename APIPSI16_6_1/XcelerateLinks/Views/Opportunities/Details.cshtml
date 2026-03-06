@@ -48,9 +48,13 @@
             <p class="job-detail-company">@(Model.Company?.Name ?? (Model.CompanyId.HasValue ? $"Empresa #{Model.CompanyId}" : "Empresa não especificada"))</p>
 
             <div class="job-tags">
-                @if (!string.IsNullOrEmpty(Model.Location))
+                @{
+                    var locationDisplayDetail = Model.LocationNav?.Name ?? Model.Location;
+                    var countryDisplayDetail = Model.LocationNav?.Country?.Name;
+                }
+                @if (!string.IsNullOrEmpty(locationDisplayDetail))
                 {
-                    <span class="job-tag">📍 @Model.Location</span>
+                    <span class="job-tag">📍 @locationDisplayDetail@(countryDisplayDetail != null ? $", {countryDisplayDetail}" : "")</span>
                 }
                 @if (Model.EmploymentType.HasValue && employmentTypes.ContainsKey(Model.EmploymentType.Value))
                 {

@@ -28,8 +28,18 @@ public partial class User
     /// <summary>Unique login handle chosen by the user (e.g. @john_doe). Used for authentication alongside email.</summary>
     public string? Username { get; set; }
 
-    /// <summary>User's city/region (e.g. "Lisboa", "Porto"). Used for location-based opportunity matching.</summary>
+    /// <summary>User's city/region (e.g. "Lisboa", "Porto"). Legacy text field – prefer LocationId.</summary>
     public string? Location { get; set; }
+
+    /// <summary>FK to the Locations table. Used for structured location-based matching.</summary>
+    public int? LocationId { get; set; }
+
+    /// <summary>FK to the Countries table.</summary>
+    public int? CountryId { get; set; }
+
+    public virtual Location? LocationNav { get; set; }
+
+    public virtual Country? CountryNav { get; set; }
 
     public string? ProfilePictureUrl { get; set; }
 

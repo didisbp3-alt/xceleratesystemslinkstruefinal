@@ -5,9 +5,9 @@
     ViewData["Title"] = Model?.Name ?? "Perfil";
     var displayName = Model?.Name ?? "Usuário";
     var avatarUrl = Model?.ProfilePictureUrl;
-    // When you add a BannerUrl property to UserProfileDTO, update this line:
     var bannerUrl = Model?.BannerUrl;
-    var location = ""; // add when you have a location property
+    var location = Model?.LocationName ?? Model?.Location ?? "";
+    var countryDisplay = Model?.CountryName;
     var currentUserId = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     bool isOwner = false;
     if (!string.IsNullOrEmpty(currentUserId) && Model != null)
@@ -79,7 +79,7 @@
                     }
                     @if (!string.IsNullOrEmpty(location))
                     {
-                        <span class="meta-item">📍 @location</span>
+                        <span class="meta-item">📍 @location@(countryDisplay != null ? $", {countryDisplay}" : "")</span>
                     }
                     @if (!string.IsNullOrEmpty(Model?.Email))
                     {

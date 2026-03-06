@@ -7,6 +7,10 @@ namespace APIPSI16.Models.DTOs
         public string? Email { get; set; }
         public string? Username { get; set; }
         public string? Location { get; set; }
+        public int? LocationId { get; set; }
+        public int? CountryId { get; set; }
+        public string? LocationName { get; set; }
+        public string? CountryName { get; set; }
         public int? Nationality { get; set; }
         public int? JobPreference { get; set; }
         public string? ProfileBio { get; set; }

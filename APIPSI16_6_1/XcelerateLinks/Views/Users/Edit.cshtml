@@ -71,6 +71,43 @@
                         </div>
 
                         <div class="mb-3">
+                            <label asp-for="CountryId" class="form-label">Country</label>
+                            <select asp-for="CountryId" class="form-select searchable-select" id="countrySelect">
+                                <option value="">— Select country —</option>
+                                @foreach (var c in (ViewBag.Countries as IEnumerable<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem> ?? Enumerable.Empty<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>()))
+                                {
+                                    @if (Model.CountryId == c.Id)
+                                    {
+                                        <option value="@c.Id" data-code="@c.Code" selected>@c.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@c.Id" data-code="@c.Code">@c.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="LocationId" class="form-label">Location / City</label>
+                            <select asp-for="LocationId" class="form-select searchable-select" id="locationSelect">
+                                <option value="">— Select location —</option>
+                                @foreach (var loc in (ViewBag.Locations as IEnumerable<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem> ?? Enumerable.Empty<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>()))
+                                {
+                                    @if (Model.LocationId == loc.Id)
+                                    {
+                                        <option value="@loc.Id" data-country="@loc.CountryId" selected>@loc.Name (@loc.CountryName)</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@loc.Id" data-country="@loc.CountryId">@loc.Name (@loc.CountryName)</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="LocationId" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
                             <label class="form-label">Preferências de cargo</label>
                             <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:0.75rem;max-height:180px;overflow-y:auto;">
                                 @foreach (var j in (ViewBag.JobRoles as IEnumerable<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem> ?? Enumerable.Empty<XcelerateLinks.Mvc.Controllers.UsersController.LookupItem>()))
@@ -301,6 +338,29 @@
             });
         });
     });
+
+    // Cascade location options by country selection
+    const countrySelect = document.getElementById('countrySelect');
+    const locationSelect = document.getElementById('locationSelect');
+    if (countrySelect && locationSelect) {
+        const allLocationOptions = Array.from(locationSelect.options).map(o => ({
+            value: o.value,
+            text: o.text,
+            country: o.getAttribute('data-country'),
+            selected: o.selected
+        }));
+
+        function filterLocations() {
+            const selectedCountry = countrySelect.value;
+            Array.from(locationSelect.options).forEach(function(opt) {
+                if (!opt.value) { opt.style.display = ''; return; }
+                opt.style.display = (!selectedCountry || opt.getAttribute('data-country') === selectedCountry) ? '' : 'none';
+            });
+        }
+
+        countrySelect.addEventListener('change', filterLocations);
+        filterLocations();
+    }
     </script>
     <script>
     // Collect multi-select job preferences before form submit

@@ -156,6 +156,18 @@ namespace XcelerateLinks.Mvc.Controllers
             else
                 ViewBag.JobRoles = Array.Empty<LookupItem>();
 
+            var countriesResp = await client.GetAsync("api/users/lookups/countries");
+            if (countriesResp.IsSuccessStatusCode)
+                ViewBag.Countries = await countriesResp.Content.ReadFromJsonAsync<IEnumerable<LookupItem>>() ?? Array.Empty<LookupItem>();
+            else
+                ViewBag.Countries = Array.Empty<LookupItem>();
+
+            var locationsResp = await client.GetAsync("api/users/lookups/locations");
+            if (locationsResp.IsSuccessStatusCode)
+                ViewBag.Locations = await locationsResp.Content.ReadFromJsonAsync<IEnumerable<LookupItem>>() ?? Array.Empty<LookupItem>();
+            else
+                ViewBag.Locations = Array.Empty<LookupItem>();
+
             return View(user);
         }
 
@@ -163,8 +175,14 @@ namespace XcelerateLinks.Mvc.Controllers
         {
             public int? NationalityId { get; set; }
             public int? JobRoleId { get; set; }
+            public int? LocationId { get; set; }
+            public int? CountryId { get; set; }
             public string? Name { get; set; }
-            public int Id => NationalityId ?? JobRoleId ?? 0;
+            public string? Region { get; set; }
+            public string? Code { get; set; }
+            public string? CountryName { get; set; }
+            public string? CountryCode { get; set; }
+            public int Id => NationalityId ?? JobRoleId ?? LocationId ?? CountryId ?? 0;
         }
 
         public class CompanyInfo
