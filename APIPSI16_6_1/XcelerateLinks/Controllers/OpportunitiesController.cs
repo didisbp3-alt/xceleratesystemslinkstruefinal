@@ -341,6 +341,8 @@ namespace XcelerateLinks.Mvc.Controllers
         public byte? EmploymentType { get; set; }
         public byte? SeniorityLevel { get; set; }
         public byte? RemoteOption { get; set; }
+        public byte? OpportunityType { get; set; }
+        public byte? ApplicationScope { get; set; }
         public int? CompanyId { get; set; }
         public string? CompanyName { get; set; }
         public string? RequiredJobRoleIds { get; set; }

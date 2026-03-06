@@ -4,6 +4,11 @@
     ViewData["Title"] = "Oportunidades de Emprego";
     var employmentTypes = new Dictionary<byte, string> { {1,"Full-Time"},{2,"Part-Time"},{3,"Contract"},{4,"Internship"},{5,"Freelance"} };
     var remoteOptions = new Dictionary<byte, string> { {0,"No local"},{1,"Híbrido"},{2,"Remoto"} };
+    var opportunityTypeBadges = new Dictionary<byte,(string label,string borderColor,string textColor)>
+    {
+        {1, ("Acompanhada 🟡","rgba(255,200,0,0.4)","#ffc800")},
+        {2, ("Longa Duração 🔵","rgba(0,120,255,0.4)","#4f8ef7")}
+    };
     var oppsWithMatch = ViewBag.OpportunitiesWithMatch as List<OpportunityWithMatch>;
     var locationsList = ViewBag.Locations as IEnumerable<UsersController.LookupItem> ?? Enumerable.Empty<UsersController.LookupItem>();
 }
@@ -221,6 +226,14 @@
                             @if (remLabel != null)
                             {
                                 <span class="job-tag remote">🌐 @remLabel</span>
+                            }
+                            @{
+                                var oppType = matchItem?.OpportunityType;
+                                if (oppType.HasValue && opportunityTypeBadges.ContainsKey(oppType.Value))
+                                {
+                                    var badge = opportunityTypeBadges[oppType.Value];
+                                    <span class="job-tag" style="border-color:@badge.borderColor;color:@badge.textColor;">@badge.label</span>
+                                }
                             }
                         </div>
                     </div>

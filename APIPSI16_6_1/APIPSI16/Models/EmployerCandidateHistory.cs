@@ -19,6 +19,17 @@ public partial class EmployerCandidateHistory
 
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// Employer-assigned priority order (lower = higher priority, null = unset).
+    /// Used to rank this contact in the employer's contacts list.
+    /// </summary>
+    public int? PriorityId { get; set; }
+
+    /// <summary>
+    /// When true, this contact has been moved to the "trash pile" by the employer.
+    /// </summary>
+    public bool IsDiscarded { get; set; }
+
     public DateTime LastContactAt { get; set; }
 
     public DateTime CreatedAt { get; set; }

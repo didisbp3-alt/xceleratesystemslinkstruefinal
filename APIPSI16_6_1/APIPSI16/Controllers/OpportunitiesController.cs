@@ -1,5 +1,6 @@
 ﻿    using APIPSI16.Data;
 using APIPSI16.Models;
+using APIPSI16.Models.DTOs;
 using APIPSI16.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -280,6 +281,8 @@ namespace APIPSI16.Controllers
                     o.CompanyId,
                     CompanyName = o.Company?.Name,
                     o.RequiredJobRoleIds,
+                    o.OpportunityType,
+                    o.ApplicationScope,
                     MatchScore = matchScore
                 };
             }).OrderByDescending(o => o.MatchScore).ToList();
@@ -339,6 +342,191 @@ namespace APIPSI16.Controllers
             return MatchScoreHelper.ComputeWeightedScore(roleScore, locationScore, requiredRoleIds.Count > 0);
         }
 
+        // GET: api/Opportunities/{id}/employer-matches
+        // Returns previous contacts (from EmployerCandidateHistory) scored against this opportunity.
+        // Available to employers and admins.
+        [HttpGet("{id}/employer-matches")]
+        [Authorize(Roles = "0,2")]
+        public async Task<IActionResult> GetEmployerMatches(int id)
+        {
+            var actorId = GetCurrentUserId();
+            var actorRole = GetCurrentUserRole();
+
+            var opp = await _context.Opportunities
+                .Include(o => o.LocationNav).ThenInclude(l => l != null ? l.Country : null)
+                .FirstOrDefaultAsync(o => o.Id == id);
+            if (opp == null) return NotFound();
+
+            // Employers can only see matches for their own company's opportunity
+            if (actorRole == "2" && opp.CompanyId.HasValue && actorId.HasValue)
+            {
+                var isMember = await _context.CompanyMembers
+                    .AnyAsync(cm => cm.CompanyId == opp.CompanyId.Value && cm.UserId == actorId.Value && cm.Role >= 1);
+                if (!isMember) return Forbid("Só podes ver matches para empresas onde és membro.");
+            }
+
+            var requiredRoleIds = string.IsNullOrWhiteSpace(opp.RequiredJobRoleIds)
+                ? new HashSet<int>()
+                : opp.RequiredJobRoleIds.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => int.TryParse(s.Trim(), out var v) ? v : 0)
+                    .Where(v => v > 0).ToHashSet();
+
+            // Load all EmployerCandidateHistory entries for this company, not discarded
+            var histories = await _context.EmployerCandidateHistories
+                .Where(h => h.CompanyId == opp.CompanyId && !h.IsDiscarded)
+                .Include(h => h.User)
+                    .ThenInclude(u => u.LocationNav).ThenInclude(l => l != null ? l.Country : null)
+                .Include(h => h.Opportunity)
+                .ToListAsync();
+
+            // Deduplicate by UserId (keep the most recent contact per user)
+            var byUser = histories
+                .GroupBy(h => h.UserId)
+                .Select(g => g.OrderByDescending(h => h.LastContactAt).First())
+                .ToList();
+
+            // Score each candidate
+            var oppRegion = opp.LocationNav?.Region;
+            var oppCountryCode = opp.LocationNav?.Country?.Code;
+
+            var matches = new List<EmployerMatchDto>();
+            foreach (var h in byUser)
+            {
+                var user = h.User;
+                // Job preferences
+                var userPrefIds = await _context.UserJobPreferences
+                    .Where(p => p.UserId == user.UserId)
+                    .Select(p => p.JobRoleId).ToListAsync();
+
+                int roleScore = 0;
+                if (requiredRoleIds.Count > 0)
+                {
+                    var cnt = userPrefIds.Count(rid => requiredRoleIds.Contains(rid));
+                    roleScore = (int)Math.Round((double)cnt / requiredRoleIds.Count * 100);
+                }
+
+                int locationScore = -1;
+                if (user.LocationId.HasValue && opp.LocationId.HasValue)
+                {
+                    locationScore = MatchScoreHelper.ComputeLocationScore(
+                        user.LocationId, opp.LocationId,
+                        user.LocationNav?.Region, oppRegion,
+                        user.LocationNav?.Country?.Code, oppCountryCode);
+                }
+
+                int score = MatchScoreHelper.ComputeWeightedScore(roleScore, locationScore, requiredRoleIds.Count > 0);
+
+                matches.Add(new EmployerMatchDto
+                {
+                    UserId = user.UserId,
+                    Name = user.Name,
+                    Email = user.Email,
+                    ProfilePictureUrl = user.ProfilePictureUrl,
+                    LocationName = user.LocationNav?.Name ?? user.Location,
+                    CountryName = user.LocationNav?.Country?.Name,
+                    JobPreference = user.JobPreference,
+                    IsAvailable = user.JobPreference != null && user.JobPreference > 0,
+                    PreviousOutcome = h.Outcome,
+                    PreviousStage = h.StageReached,
+                    PreviousOpportunityTitle = h.Opportunity?.Title,
+                    LastContactAt = h.LastContactAt,
+                    PriorityId = h.PriorityId,
+                    EmployerCandidateHistoryId = h.EmployerCandidateHistoryId,
+                    MatchScore = score
+                });
+            }
+
+            return Ok(matches.OrderByDescending(m => m.MatchScore).ToList());
+        }
+
+        // GET: api/Opportunities/employer-contacts?companyId=X
+        // Full contact history for a company (for the contacts list page).
+        [HttpGet("employer-contacts")]
+        [Authorize(Roles = "0,2")]
+        public async Task<IActionResult> GetEmployerContacts([FromQuery] int companyId, [FromQuery] bool discarded = false)
+        {
+            var actorId = GetCurrentUserId();
+            var actorRole = GetCurrentUserRole();
+
+            if (actorRole == "2" && actorId.HasValue)
+            {
+                var isMember = await _context.CompanyMembers
+                    .AnyAsync(cm => cm.CompanyId == companyId && cm.UserId == actorId.Value && cm.Role >= 1);
+                if (!isMember) return Forbid();
+            }
+
+            var contacts = await _context.EmployerCandidateHistories
+                .Where(h => h.CompanyId == companyId && h.IsDiscarded == discarded)
+                .Include(h => h.User)
+                .Include(h => h.Opportunity)
+                .OrderBy(h => h.IsDiscarded ? 1 : 0)
+                .ThenBy(h => h.PriorityId ?? int.MaxValue)
+                .ThenByDescending(h => h.LastContactAt)
+                .Select(h => new
+                {
+                    h.EmployerCandidateHistoryId,
+                    h.UserId,
+                    UserName = h.User.Name,
+                    UserEmail = h.User.Email,
+                    UserPicture = h.User.ProfilePictureUrl,
+                    h.Outcome,
+                    h.StageReached,
+                    h.Notes,
+                    h.PriorityId,
+                    h.IsDiscarded,
+                    h.LastContactAt,
+                    OpportunityId = h.OpportunityId,
+                    OpportunityTitle = h.Opportunity != null ? h.Opportunity.Title : null
+                })
+                .ToListAsync();
+
+            return Ok(contacts);
+        }
+
+        // PUT: api/Opportunities/employer-contacts/{id}/priority
+        [HttpPut("employer-contacts/{historyId}/priority")]
+        [Authorize(Roles = "0,2")]
+        public async Task<IActionResult> SetContactPriority(int historyId, [FromBody] SetPriorityDto dto)
+        {
+            var entry = await _context.EmployerCandidateHistories.FindAsync(historyId);
+            if (entry == null) return NotFound();
+
+            var actorId = GetCurrentUserId();
+            var actorRole = GetCurrentUserRole();
+            if (actorRole == "2" && actorId.HasValue)
+            {
+                var isMember = await _context.CompanyMembers
+                    .AnyAsync(cm => cm.CompanyId == entry.CompanyId && cm.UserId == actorId.Value && cm.Role >= 1);
+                if (!isMember) return Forbid();
+            }
+
+            entry.PriorityId = dto.PriorityId;
+            await _context.SaveChangesAsync();
+            return Ok(new { entry.EmployerCandidateHistoryId, entry.PriorityId });
+        }
+
+        // PUT: api/Opportunities/employer-contacts/{id}/discard
+        [HttpPut("employer-contacts/{historyId}/discard")]
+        [Authorize(Roles = "0,2")]
+        public async Task<IActionResult> DiscardContact(int historyId, [FromBody] DiscardDto dto)
+        {
+            var entry = await _context.EmployerCandidateHistories.FindAsync(historyId);
+            if (entry == null) return NotFound();
+
+            var actorId = GetCurrentUserId();
+            var actorRole = GetCurrentUserRole();
+            if (actorRole == "2" && actorId.HasValue)
+            {
+                var isMember = await _context.CompanyMembers
+                    .AnyAsync(cm => cm.CompanyId == entry.CompanyId && cm.UserId == actorId.Value && cm.Role >= 1);
+                if (!isMember) return Forbid();
+            }
+
+            entry.IsDiscarded = dto.Discard;
+            await _context.SaveChangesAsync();
+            return Ok(new { entry.EmployerCandidateHistoryId, entry.IsDiscarded });
+        }
+
         private bool OpportunityExists(int id)
         {
             return _context.Opportunities.Any(o => o.Id == id);
@@ -355,4 +543,7 @@ namespace APIPSI16.Controllers
             return User.FindFirst(ClaimTypes.Role)?.Value;
         }
     }
+
+    public class SetPriorityDto { public int? PriorityId { get; set; } }
+    public class DiscardDto { public bool Discard { get; set; } }
 }

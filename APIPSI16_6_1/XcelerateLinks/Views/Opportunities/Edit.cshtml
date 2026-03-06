@@ -10,6 +10,8 @@
     var employmentTypes = new Dictionary<byte, string> { {1,"Full-Time"},{2,"Part-Time"},{3,"Contract"},{4,"Internship"},{5,"Freelance"} };
     var remoteOptions = new Dictionary<byte, string> { {0,"No local"},{1,"Híbrido"},{2,"Remoto"} };
     var seniorityLevels = new Dictionary<byte, string> { {1,"Junior"},{2,"Mid-level"},{3,"Senior"},{4,"Lead"},{5,"Manager"} };
+    var opportunityTypes = new Dictionary<byte, string> { {0,"Candidatura Padrão"},{1,"Candidatura Acompanhada 🟡"},{2,"Longa Duração (com testes) 🔵"} };
+    var applicationScopes = new Dictionary<byte, string> { {0,"Externa (fora da empresa)"},{1,"Interna (talento interno)"},{2,"Mista (interno + externo)"} };
 }
 
 <style>
@@ -124,6 +126,30 @@
                             <option value="@kv.Key" selected="@(Model.SeniorityLevel == kv.Key ? "selected" : null)">@kv.Value</option>
                         }
                     </select>
+                </div>
+
+                <div class="form-group-row mb-3">
+                    <div>
+                        <label asp-for="OpportunityType" class="form-label form-label-styled">Tipo de candidatura</label>
+                        <select asp-for="OpportunityType" class="form-select form-select-styled">
+                            <option value="">Seleciona...</option>
+                            @foreach (var kv in opportunityTypes)
+                            {
+                                <option value="@kv.Key" selected="@(Model.OpportunityType == kv.Key ? "selected" : null)">@kv.Value</option>
+                            }
+                        </select>
+                        <small style="font-size:0.75rem;color:#a8b2c1;">🟡 Acompanhada: entrevista ao vivo durante candidatura. 🔵 Longa duração: testes pré-preparados pelo empregador.</small>
+                    </div>
+                    <div>
+                        <label asp-for="ApplicationScope" class="form-label form-label-styled">Âmbito das candidaturas</label>
+                        <select asp-for="ApplicationScope" class="form-select form-select-styled">
+                            <option value="">Seleciona...</option>
+                            @foreach (var kv in applicationScopes)
+                            {
+                                <option value="@kv.Key" selected="@(Model.ApplicationScope == kv.Key ? "selected" : null)">@kv.Value</option>
+                            }
+                        </select>
+                    </div>
                 </div>
 
                 <div class="mb-4">

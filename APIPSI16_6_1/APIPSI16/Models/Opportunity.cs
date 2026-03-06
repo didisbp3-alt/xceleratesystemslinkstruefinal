@@ -31,6 +31,17 @@ public partial class Opportunity
 
     public byte? RemoteOption { get; set; }
 
+    /// <summary>
+    /// 0=Standard, 1=GuidedApplication (candidatura acompanhada – live employer oversight),
+    /// 2=LongTerm (candidatura de longo prazo com fase de testes)
+    /// </summary>
+    public byte? OpportunityType { get; set; }
+
+    /// <summary>
+    /// 0=External (talento fora da empresa), 1=Internal (talento já dentro da empresa), 2=Mixed
+    /// </summary>
+    public byte? ApplicationScope { get; set; }
+
     /// <summary>Comma-separated JobRoleId values (e.g. "1,3,7")</summary>
     public string? RequiredJobRoleIds { get; set; }
 

@@ -9,6 +9,8 @@
 
     var employmentTypes = new Dictionary<byte, string> { {1,"Full-Time"},{2,"Part-Time"},{3,"Contract"},{4,"Internship"},{5,"Freelance"} };
     var remoteOptions = new Dictionary<byte, string> { {0,"No local"},{1,"Híbrido"},{2,"Remoto"} };
+    var opportunityTypes = new Dictionary<byte, string> { {0,"Padrão"},{1,"Acompanhada 🟡"},{2,"Longa Duração 🔵"} };
+    var applicationScopes = new Dictionary<byte, string> { {0,"Externa"},{1,"Interna"},{2,"Mista"} };
 }
 
 <style>
@@ -78,6 +80,15 @@
                         <span class="job-tag" style="border-color:rgba(0,221,85,0.3);color:#00DD55;background:rgba(0,221,85,0.06);">🟢 @jr.Name</span>
                     }
                 }
+                @if (Model.OpportunityType.HasValue && opportunityTypes.ContainsKey(Model.OpportunityType.Value) && Model.OpportunityType.Value > 0)
+                {
+                    <span class="job-tag" style="border-color:rgba(255,200,0,0.3);color:#ffc800;background:rgba(255,200,0,0.06);">@opportunityTypes[Model.OpportunityType.Value]</span>
+                }
+                @if (Model.ApplicationScope.HasValue && applicationScopes.ContainsKey(Model.ApplicationScope.Value))
+                {
+                    <span class="job-tag">🏢 @applicationScopes[Model.ApplicationScope.Value]</span>
+                }
+
             </div>
 
             <div class="d-flex gap-2 flex-wrap">
@@ -86,6 +97,11 @@
                 {
                     <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-primary">Editar</a>
                     <a asp-action="Delete" asp-route-id="@Model.Id" class="btn btn-outline-danger">Eliminar</a>
+                    @if (Model.CompanyId.HasValue)
+                    {
+                        <a asp-controller="EmployerContacts" asp-action="Index" asp-route-companyId="@Model.CompanyId" asp-route-opportunityId="@Model.Id"
+                           class="btn btn-outline-warning" style="border-color:rgba(255,200,0,0.4);color:#ffc800;">🎯 Matches Anteriores</a>
+                    }
                 }
             </div>
         </div>
